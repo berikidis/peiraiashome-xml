@@ -65,25 +65,10 @@ const columns: ColumnDef<ProcessedProduct>[] = [
       ),
       cell: ({ row }) => (
          <>
-            <div className="max-w-80 font-medium text-xs/5 truncate">
+            <div className="max-w-60 font-medium text-xs/5 text-wrap">
                {row.getValue('title')}
             </div>
          </>
-      ),
-   },
-   {
-      accessorKey: 'description',
-      header: 'Description',
-      cell: ({ row }) => (
-         <div className="max-w-44">
-            <div
-               className="text-xs/5 truncate line-clamp-2"
-               title={row.getValue('description')}
-               dangerouslySetInnerHTML={{
-                  __html: row.getValue('description'),
-               }}
-            />
-         </div>
       ),
    },
    {
@@ -101,6 +86,21 @@ const columns: ColumnDef<ProcessedProduct>[] = [
       ),
       cell: ({ row }) => (
          <div className="text-xs/5">{row.getValue('model')}</div>
+      ),
+   },
+   {
+      accessorKey: 'description',
+      header: 'Description',
+      cell: ({ row }) => (
+         <div className="max-w-44">
+            <div
+               className="text-xs/5 truncate line-clamp-2"
+               title={row.getValue('description')}
+               dangerouslySetInnerHTML={{
+                  __html: row.getValue('description'),
+               }}
+            />
+         </div>
       ),
    },
    {
@@ -135,6 +135,19 @@ const columns: ColumnDef<ProcessedProduct>[] = [
                <BadgeCheck />
                {stock}
             </Badge>
+         )
+      },
+   },
+   {
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => {
+         const product = row.original
+
+         return (
+            <a href={product.link} target="_blank" rel="noopener noreferrer">
+               View
+            </a>
          )
       },
    },
