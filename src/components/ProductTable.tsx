@@ -63,6 +63,23 @@ const columns: ColumnDef<ProcessedProductWithStatus>[] = [
       size: 80,
    },
    {
+      accessorKey: 'model',
+      header: ({ column }) => (
+         <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="has-[>svg]:px-0"
+         >
+            Model
+            <ChevronsUpDown />
+         </Button>
+      ),
+      cell: ({ row }) => (
+         <div className="text-xs/5">{row.getValue('model')}</div>
+      ),
+   },
+   {
       accessorKey: 'image',
       header: 'Image',
       cell: ({ row }) => (
@@ -95,23 +112,6 @@ const columns: ColumnDef<ProcessedProductWithStatus>[] = [
          <div className="max-w-60 text-xs/5 text-wrap line-clamp-2">
             {row.getValue('title')}
          </div>
-      ),
-   },
-   {
-      accessorKey: 'model',
-      header: ({ column }) => (
-         <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="has-[>svg]:px-0"
-         >
-            Model
-            <ChevronsUpDown />
-         </Button>
-      ),
-      cell: ({ row }) => (
-         <div className="text-xs/5">{row.getValue('model')}</div>
       ),
    },
    {
