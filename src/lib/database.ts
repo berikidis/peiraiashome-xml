@@ -90,12 +90,35 @@ export async function getLastUpdatedTime(): Promise<string | null> {
          `SELECT MAX(date_modified) as last_updated
           FROM 1c0p_product`
       )
-      console.log('Last updated query result:', results[0])
       return results[0]?.last_updated || null
    } catch (error) {
       console.error('Error getting last updated time:', error)
       return null
    }
+}
+
+export async function checkProductsExistence(
+   models: string[]
+): Promise<Record<string, boolean>> {
+   if (models.length === 0) return {}
+
+   const placeholders = models.map(() => '?').join(',')
+   const results = await executeQuery<ProductRow>(
+      `SELECT model
+       FROM 1c0p_product
+       WHERE model IN (${placeholders})`,
+      models
+   )
+
+   const existingModels = new Set(results.map((row) => row.model))
+
+   return models.reduce(
+      (acc, model) => {
+         acc[model] = existingModels.has(model)
+         return acc
+      },
+      {} as Record<string, boolean>
+   )
 }
 
 export default pool

@@ -22,17 +22,45 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ProcessedProduct } from '@/types/xml-data'
-import { BadgeCheck, ChevronsUpDown } from 'lucide-react'
+import { ProcessedProductWithStatus } from '@/types/xml-data'
+import {
+   BadgeCheck,
+   BadgePlus,
+   ChevronsUpDown,
+   Dot,
+   SquareArrowOutUpRight,
+} from 'lucide-react'
 import Image from 'next/image'
 import { TablePagination } from '@/components/TablePagination'
 
-const columns: ColumnDef<ProcessedProduct>[] = [
+const columns: ColumnDef<ProcessedProductWithStatus>[] = [
    {
       id: 'rowNumber',
-      header: '#',
-      cell: ({ row }) => <span className="text-xs">{row.index + 1}</span>,
-      size: 50,
+      header: () => <div className="text-center">#</div>,
+      cell: ({ row }) => (
+         <div className="text-center">
+            <span className="text-xs">{row.index + 1}</span>
+         </div>
+      ),
+   },
+   {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+         const isNew = row.original.isNew
+         return isNew ? (
+            <Badge>
+               <BadgePlus />
+               New
+            </Badge>
+         ) : (
+            <Badge variant="secondary">
+               <BadgeCheck />
+               Synced
+            </Badge>
+         )
+      },
+      size: 80,
    },
    {
       accessorKey: 'image',
@@ -57,18 +85,16 @@ const columns: ColumnDef<ProcessedProduct>[] = [
             variant="ghost"
             size="sm"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="-ml-3"
+            className="has-[>svg]:px-0"
          >
             Title
             <ChevronsUpDown />
          </Button>
       ),
       cell: ({ row }) => (
-         <>
-            <div className="max-w-60 font-medium text-xs/5 text-wrap">
-               {row.getValue('title')}
-            </div>
-         </>
+         <div className="max-w-60 text-xs/5 text-wrap line-clamp-2">
+            {row.getValue('title')}
+         </div>
       ),
    },
    {
@@ -78,7 +104,7 @@ const columns: ColumnDef<ProcessedProduct>[] = [
             variant="ghost"
             size="sm"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="-ml-3"
+            className="has-[>svg]:px-0"
          >
             Model
             <ChevronsUpDown />
@@ -127,15 +153,8 @@ const columns: ColumnDef<ProcessedProduct>[] = [
    {
       accessorKey: 'stock',
       header: 'Stock',
-      cell: ({ row }) => {
-         const stock = row.getValue('stock') as string
-
-         return (
-            <Badge variant="secondary">
-               <BadgeCheck />
-               {stock}
-            </Badge>
-         )
+      cell: () => {
+         return <Dot className="text-green-600" size={35} />
       },
    },
    {
@@ -146,7 +165,7 @@ const columns: ColumnDef<ProcessedProduct>[] = [
 
          return (
             <a href={product.link} target="_blank" rel="noopener noreferrer">
-               View
+               <SquareArrowOutUpRight size={14} />
             </a>
          )
       },
@@ -154,7 +173,7 @@ const columns: ColumnDef<ProcessedProduct>[] = [
 ]
 
 interface ProductTableProps {
-   data: ProcessedProduct[]
+   data: ProcessedProductWithStatus[]
    globalFilter: string
    setGlobalFilter: (value: string) => void
 }
@@ -164,7 +183,9 @@ export function ProductTable({
    globalFilter,
    setGlobalFilter,
 }: ProductTableProps) {
-   const [sorting, setSorting] = useState<SortingState>([])
+   const [sorting, setSorting] = useState<SortingState>([
+      { id: 'status', desc: true },
+   ])
    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
    const [pagination, setPagination] = useState({
       pageIndex: 0,
@@ -223,6 +244,9 @@ export function ProductTable({
                         <TableRow
                            key={row.id}
                            data-state={row.getIsSelected() && 'selected'}
+                           className={
+                              row.original.isNew ? 'bg-neutral-100' : ''
+                           }
                         >
                            {row.getVisibleCells().map((cell) => (
                               <TableCell key={cell.id}>
