@@ -1,45 +1,9 @@
 import { Suspense } from 'react'
 import { ProductManager } from '@/components/ProductManager'
 import { xmlService } from '@/lib/xml-service'
-import { getLastUpdatedTime } from '@/lib/database'
-import { Skeleton } from '@/components/ui/skeleton' // Loading component
+import { checkProductsExistence, getLastUpdatedTime } from '@/lib/database'
+import { ProcessedProductWithStatus } from '@/types/xml-data'
 
-// Loading component
-function ProductsLoading() {
-   return (
-      <div className="container mx-auto px-3 py-10">
-         <div className="flex flex-col space-y-8">
-            <div className="space-y-2">
-               <Skeleton className="h-4 w-[200px]" />
-               <Skeleton className="h-4 w-[250px]" />
-            </div>
-            <Skeleton className="h-[100px] w-full rounded-xl" />
-         </div>
-      </div>
-   )
-}
-
-// Error component
-function ProductsError({ error }: { error: string }) {
-   return (
-      <div className="container mx-auto px-3">
-         <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-            <h2 className="text-lg font-semibold text-red-800 mb-2">
-               Failed to Load Products
-            </h2>
-            <p className="text-red-700">{error}</p>
-            <button
-               onClick={() => window.location.reload()}
-               className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-            >
-               Try Again
-            </button>
-         </div>
-      </div>
-   )
-}
-
-// Server component to fetch data
 async function ProductsContent() {
    try {
       const [products, lastUpdated] = await Promise.all([
@@ -47,27 +11,42 @@ async function ProductsContent() {
          getLastUpdatedTime(),
       ])
 
+      // Check which products exist in database
+      const models = products.map((p) => p.model)
+      const existenceMap = await checkProductsExistence(models)
+
+      // Add database existence status to products
+      const productsWithStatus: ProcessedProductWithStatus[] = products.map(
+         (product) => ({
+            ...product,
+            existsInDatabase: existenceMap[product.model] || false,
+            isNew: !existenceMap[product.model],
+         })
+      )
+
+      // Sort products: new products first, then existing ones
+      const sortedProducts = productsWithStatus.sort((a, b) => {
+         if (a.isNew && !b.isNew) return -1
+         if (!a.isNew && b.isNew) return 1
+         return 0
+      })
+
       return (
-         <div className="container mx-auto px-3 py-10">
-            <ProductManager initialData={products} lastUpdated={lastUpdated} />
+         <div className="w-custom mx-auto px-3 py-10">
+            <ProductManager
+               initialData={sortedProducts}
+               lastUpdated={lastUpdated}
+            />
          </div>
       )
    } catch (error) {
       console.error('Failed to fetch XML data:', error)
-      return (
-         <ProductsError
-            error={
-               error instanceof Error ? error.message : 'Unknown error occurred'
-            }
-         />
-      )
    }
 }
 
-// Main page component
 export default function HomePage() {
    return (
-      <Suspense fallback={<ProductsLoading />}>
+      <Suspense fallback={'Loading...'}>
          <ProductsContent />
       </Suspense>
    )

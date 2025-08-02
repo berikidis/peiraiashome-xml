@@ -55,3 +55,8 @@ export interface ProcessedProduct {
    category: string
    link: string
 }
+
+export interface ProcessedProductWithStatus extends ProcessedProduct {
+   existsInDatabase: boolean
+   isNew: boolean
+}

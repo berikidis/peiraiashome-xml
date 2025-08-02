@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { ProductTable } from './ProductTable'
 import { Button } from './ui/button'
-import { ProcessedProduct } from '@/types/xml-data'
+import { ProcessedProductWithStatus } from '@/types/xml-data'
 import { Database, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 
 interface ProductManagerProps {
-   initialData: ProcessedProduct[]
+   initialData: ProcessedProductWithStatus[]
    lastUpdated: string | null
 }
 
@@ -19,7 +19,7 @@ export function ProductManager({
 }: ProductManagerProps) {
    const [globalFilter, setGlobalFilter] = useState('')
    const [isUpdating, setIsUpdating] = useState(false)
-
+   
    const handleUpdateDatabase = async () => {
       setIsUpdating(true)
 
