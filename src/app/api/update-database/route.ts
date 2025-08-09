@@ -18,11 +18,15 @@ export async function POST(request: NextRequest) {
             const dbProduct = await findProductByModel(product.model)
 
             if (dbProduct) {
-               // Update product description with title from XML
+               // Update product description, title, prices, image and attributes with data from XML
                const success = await updateProductDescription(
                   dbProduct.product_id,
                   product.title,
-                  product.description
+                  product.description,
+                  product.price_with_vat,
+                  product.price_without_vat,
+                  product.image,
+                  product.size
                )
 
                if (success) {

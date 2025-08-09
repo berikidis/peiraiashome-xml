@@ -54,9 +54,14 @@ export async function findProductByModel(
 export async function updateProductDescription(
    productId: number,
    title: string,
-   description: string
+   description: string,
+   priceWithVat: number,
+   priceWithoutVat: number,
+   imageLink: string,
+   size: string
 ): Promise<boolean> {
    try {
+      // Update product description
       const [descResult] = await pool.execute<ResultSetHeader>(
          `UPDATE 1c0p_product_description
           SET name         = ?,
@@ -68,11 +73,31 @@ export async function updateProductDescription(
          [title, title, title, description, productId]
       )
 
+      // Update product price, image and date_modified
       await pool.execute(
          `UPDATE 1c0p_product
-          SET date_modified = CONVERT_TZ(NOW(), '+00:00', '+03:00')
+          SET price         = ?,
+              image         = ?,
+              date_modified = CONVERT_TZ(NOW(), '+00:00', '+03:00')
           WHERE product_id = ?`,
-         [productId]
+         [priceWithVat, imageLink, productId]
+      )
+
+      // Update special price (price without VAT) in product_special table
+      await pool.execute(
+         `UPDATE 1c0p_product_special
+          SET price = ?
+          WHERE product_id = ?`,
+         [priceWithoutVat, productId]
+      )
+
+      // Update product attribute text with size from XML (attribute_id = 17)
+      await pool.execute(
+         `UPDATE 1c0p_product_attribute
+          SET text = ?
+          WHERE product_id = ?
+            AND attribute_id = 17`,
+         [size || '', productId]
       )
 
       return descResult.affectedRows > 0
