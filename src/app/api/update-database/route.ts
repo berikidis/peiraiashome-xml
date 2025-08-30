@@ -11,7 +11,6 @@ export async function POST(request: NextRequest) {
       let errorCount = 0
       const errors: string[] = []
 
-      // Process each product
       for (const product of products) {
          try {
             // Find product in database by model
@@ -36,7 +35,6 @@ export async function POST(request: NextRequest) {
                   errors.push(`Failed to update product ${product.model}`)
                }
             } else {
-               // Product not found in database
                errors.push(
                   `Product model ${product.model} not found in database`
                )
