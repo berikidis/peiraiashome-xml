@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { xmlService } from '@/lib/xml-service'
-import { findProductByModel, updateProductDescription } from '@/lib/database'
+import { findProductByModel, insertNewProduct, updateProductDescription, } from '@/lib/database'
 
 export async function POST(request: NextRequest) {
    try {
@@ -8,6 +8,7 @@ export async function POST(request: NextRequest) {
       const products = await xmlService.fetchAndParseXml()
 
       let updatedCount = 0
+      let insertedCount = 0
       let errorCount = 0
       const errors: string[] = []
 
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
             const dbProduct = await findProductByModel(product.model)
 
             if (dbProduct) {
-               // Update product description, title, prices, image and attributes with data from XML
+               // Update existing product description, title, prices, image and attributes with data from XML
                const success = await updateProductDescription(
                   dbProduct.product_id,
                   product.title,
@@ -35,9 +36,23 @@ export async function POST(request: NextRequest) {
                   errors.push(`Failed to update product ${product.model}`)
                }
             } else {
-               errors.push(
-                  `Product model ${product.model} not found in database`
+               // Insert new product into database in adamhome_hidden category
+               const newProductId = await insertNewProduct(
+                  product.title,
+                  product.description,
+                  product.price_with_vat,
+                  product.price_without_vat,
+                  product.image,
+                  product.model,
+                  product.size
                )
+
+               if (newProductId) {
+                  insertedCount++
+               } else {
+                  errorCount++
+                  errors.push(`Failed to insert new product ${product.model}`)
+               }
             }
          } catch (error) {
             errorCount++
@@ -53,6 +68,7 @@ export async function POST(request: NextRequest) {
          stats: {
             totalProducts: products.length,
             updatedCount,
+            insertedCount,
             errorCount,
             errors: errors.slice(0, 15),
          },

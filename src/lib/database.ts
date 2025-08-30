@@ -51,6 +51,90 @@ export async function findProductByModel(
    return results[0] || null
 }
 
+export async function insertNewProduct(
+   title: string,
+   description: string,
+   priceWithVat: number,
+   priceWithoutVat: number,
+   imageLink: string,
+   model: string,
+   size: string
+): Promise<number | null> {
+   const connection = await pool.getConnection()
+
+   try {
+      await connection.beginTransaction()
+
+      // Insert into 1c0p_product table
+      const [productResult] = await connection.execute<ResultSetHeader>(
+         `INSERT INTO 1c0p_product (
+            xml_flag, gablias_flag, teoran, model, sku, upc, ean, jan, isbn, mpn,
+            location, quantity, stock_status_id, image, manufacturer_id, supplier_id,
+            shipping, price, points, tax_class_id, date_available, weight, weight_class_id,
+            length, width, height, length_class_id, subtract, minimum, sort_order,
+            status, viewed, date_added, date_modified, skip_import, smp_related_products,
+            smp_url_category_id
+         ) VALUES (
+                     0, 0, 0, ?, '', '', '', '', '', ?,
+                     '', 0, 7, ?, 12, 12,
+                     1, ?, 0, 9, '0000-00-00', 0.00000000, 0,
+                     0.00000000, 0.00000000, 0.00000000, 0, 1, 1, 0,
+                     0, 0, CONVERT_TZ(NOW(), '+00:00', '+03:00'), CONVERT_TZ(NOW(), '+00:00', '+03:00'), 0, 0,
+                     NULL
+                  )`,
+         [model, model, imageLink, priceWithVat]
+      )
+
+      const productId = productResult.insertId
+
+      // Insert into 1c0p_product_description table (language_id = 2)
+      await connection.execute(
+         `INSERT INTO 1c0p_product_description (
+            product_id, language_id, name, meta_title, smp_h1_title, description, tag,
+            meta_description, meta_keyword, meta_title_ag, smp_h1_title_ag, meta_keyword_ag,
+            meta_description_ag, tag_ag, smp_alt_images, smp_alt_images_ag, smp_title_images,
+            smp_title_images_ag, url_alias_exists, description_ag
+         ) VALUES (?, 2, ?, ?, ?, ?, '', '', '', '0', '0', '0', '0', '0', '', '0', '', '0', '', '0')`,
+         [productId, title, title, title, description]
+      )
+
+      // Insert into 1c0p_product_special table
+      await connection.execute(
+         `INSERT INTO 1c0p_product_special (
+            product_id, customer_group_id, price, date_start, date_end, priority
+         ) VALUES (?, 0, ?, '0000-00-00', '0000-00-00', 1)`,
+         [productId, priceWithoutVat]
+      )
+
+      // Insert into 1c0p_product_attribute table (attribute_id = 17 for size)
+      if (size && size.trim()) {
+         await connection.execute(
+            `INSERT INTO 1c0p_product_attribute (
+               product_id, attribute_id, language_id, text
+            ) VALUES (?, 17, 2, ?)`,
+            [productId, size]
+         )
+      }
+
+      // Insert into 1c0p_product_to_category table (category_id = 217 for adamhome_hidden)
+      await connection.execute(
+         `INSERT INTO 1c0p_product_to_category (
+            product_id, category_id
+         ) VALUES (?, 217)`,
+         [productId]
+      )
+
+      await connection.commit()
+      return productId
+   } catch (error) {
+      await connection.rollback()
+      console.error('New product insertion error:', error)
+      return null
+   } finally {
+      connection.release()
+   }
+}
+
 export async function updateProductDescription(
    productId: number,
    title: string,

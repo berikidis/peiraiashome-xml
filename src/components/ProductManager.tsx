@@ -19,7 +19,7 @@ export function ProductManager({
 }: ProductManagerProps) {
    const [globalFilter, setGlobalFilter] = useState('')
    const [isUpdating, setIsUpdating] = useState(false)
-   
+
    const handleUpdateDatabase = async () => {
       setIsUpdating(true)
 
@@ -31,8 +31,22 @@ export function ProductManager({
          const result = await response.json()
 
          if (result.success) {
+            const { updatedCount, insertedCount } = result.stats
+            const totalProcessed = updatedCount + insertedCount
+
+            let description = ''
+            if (updatedCount > 0 && insertedCount > 0) {
+               description = `Updated ${updatedCount} existing products and inserted ${insertedCount} new products`
+            } else if (updatedCount > 0) {
+               description = `Updated ${updatedCount} products successfully`
+            } else if (insertedCount > 0) {
+               description = `Inserted ${insertedCount} new products successfully`
+            } else {
+               description = 'No changes were made'
+            }
+
             toast.success('Database updated', {
-               description: `Updated ${result.stats.updatedCount} products successfully`,
+               description,
             })
          } else {
             toast.error('Update failed', {
