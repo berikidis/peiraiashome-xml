@@ -91,7 +91,7 @@ export function ProductManager({
             <div className="flex flex-col gap-4">
                <div className="flex justify-between items-center gap-2">
                   <Input
-                     placeholder="Search by title or model number"
+                     placeholder="Search by model number"
                      value={globalFilter}
                      onChange={(event) => setGlobalFilter(event.target.value)}
                      className="max-w-sm h-8"

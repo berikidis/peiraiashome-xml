@@ -67,7 +67,7 @@ export async function insertNewProduct(
    try {
       await connection.beginTransaction()
 
-      // Insert into 1c0p_product table (status = 1 for active, xml_flag = 1 for XML products)
+      // Insert into 1c0p_product table (status = 0 for new products, stock_status_id = 7, quantity = 199, xml_flag = 1 for XML products)
       const [productResult] = await connection.execute<ResultSetHeader>(
          `INSERT INTO 1c0p_product (
             xml_flag, gablias_flag, teoran, model, sku, upc, ean, jan, isbn, mpn,
@@ -78,10 +78,10 @@ export async function insertNewProduct(
             smp_url_category_id
          ) VALUES (
                      1, 0, 0, ?, '', '', '', '', '', ?,
-                     '', 0, 7, ?, 12, 12,
+                     '', 199, 7, ?, 12, 12,
                      1, ?, 0, 9, '0000-00-00', 0.00000000, 0,
                      0.00000000, 0.00000000, 0.00000000, 0, 1, 1, 0,
-                     1, 0, CONVERT_TZ(NOW(), '+00:00', '+03:00'), CONVERT_TZ(NOW(), '+00:00', '+03:00'), 0, 0,
+                     0, 0, CONVERT_TZ(NOW(), '+00:00', '+03:00'), CONVERT_TZ(NOW(), '+00:00', '+03:00'), 0, 0,
                      NULL
                   )`,
          [model, model, imageLink, priceWithVat]
@@ -241,13 +241,16 @@ export async function checkProductsExistence(
 
 // NEW FUNCTION: Disable products that are not in the current XML feed
 // Only affects products from Adam Home supplier (supplier_id = 12)
+// Also sets stock_status_id to 5 when disabling
 export async function disableProductsNotInXml(
    currentXmlModels: string[]
 ): Promise<number> {
    if (currentXmlModels.length === 0) {
-      // If no models in XML, disable only Adam Home products
+      // If no models in XML, disable only Adam Home products and set stock_status_id to 5
       const [result] = await pool.execute<ResultSetHeader>(
-         `UPDATE 1c0p_product SET status = 0 WHERE status = 1 AND supplier_id = 12`
+         `UPDATE 1c0p_product
+          SET status = 0, stock_status_id = 5
+          WHERE status = 1 AND supplier_id = 12`
       )
       return result.affectedRows
    }
@@ -255,7 +258,7 @@ export async function disableProductsNotInXml(
    const placeholders = currentXmlModels.map(() => '?').join(',')
    const [result] = await pool.execute<ResultSetHeader>(
       `UPDATE 1c0p_product
-       SET status = 0
+       SET status = 0, stock_status_id = 5
        WHERE status = 1 AND supplier_id = 12 AND model NOT IN (${placeholders})`,
       currentXmlModels
    )
