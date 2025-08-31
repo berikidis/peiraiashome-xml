@@ -59,7 +59,6 @@ const columns: ColumnDef<ProcessedProductWithStatus>[] = [
             )
          }
       },
-      size: 120,
    },
    {
       accessorKey: 'model',
@@ -108,7 +107,7 @@ const columns: ColumnDef<ProcessedProductWithStatus>[] = [
          </Button>
       ),
       cell: ({ row }) => (
-         <div className="max-w-60 text-xs/5 text-wrap line-clamp-2">
+         <div className="text-xs/5 text-wrap line-clamp-2">
             {row.getValue('title')}
          </div>
       ),
@@ -132,7 +131,7 @@ const columns: ColumnDef<ProcessedProductWithStatus>[] = [
       accessorKey: 'colors',
       header: 'Color',
       cell: ({ row }) => (
-         <div className="max-w-44">
+         <div>
             <span
                className="text-xs/5 text-wrap"
                title={row.getValue('colors')}
