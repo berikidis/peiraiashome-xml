@@ -39,13 +39,15 @@ export interface ProductRow extends RowDataPacket {
    product_id: number
    model: string
    date_modified: string
+   status: number
 }
 
 export async function findProductByModel(
    model: string
 ): Promise<ProductRow | null> {
+   // Only look for products from Adam Home supplier (supplier_id = 12)
    const results = await executeQuery<ProductRow>(
-      'SELECT product_id, model FROM 1c0p_product WHERE model = ? LIMIT 1',
+      'SELECT product_id, model, status FROM 1c0p_product WHERE model = ? AND supplier_id = 12 LIMIT 1',
       [model]
    )
    return results[0] || null
@@ -65,7 +67,7 @@ export async function insertNewProduct(
    try {
       await connection.beginTransaction()
 
-      // Insert into 1c0p_product table
+      // Insert into 1c0p_product table (status = 1 for active, xml_flag = 1 for XML products)
       const [productResult] = await connection.execute<ResultSetHeader>(
          `INSERT INTO 1c0p_product (
             xml_flag, gablias_flag, teoran, model, sku, upc, ean, jan, isbn, mpn,
@@ -75,11 +77,11 @@ export async function insertNewProduct(
             status, viewed, date_added, date_modified, skip_import, smp_related_products,
             smp_url_category_id
          ) VALUES (
-                     0, 0, 0, ?, '', '', '', '', '', ?,
+                     1, 0, 0, ?, '', '', '', '', '', ?,
                      '', 0, 7, ?, 12, 12,
                      1, ?, 0, 9, '0000-00-00', 0.00000000, 0,
                      0.00000000, 0.00000000, 0.00000000, 0, 1, 1, 0,
-                     0, 0, CONVERT_TZ(NOW(), '+00:00', '+03:00'), CONVERT_TZ(NOW(), '+00:00', '+03:00'), 0, 0,
+                     1, 0, CONVERT_TZ(NOW(), '+00:00', '+03:00'), CONVERT_TZ(NOW(), '+00:00', '+03:00'), 0, 0,
                      NULL
                   )`,
          [model, model, imageLink, priceWithVat]
@@ -157,11 +159,12 @@ export async function updateProductDescription(
          [title, title, title, description, productId]
       )
 
-      // Update product price, image and date_modified
+      // Update product price, image, date_modified and re-enable if disabled
       await pool.execute(
          `UPDATE 1c0p_product
           SET price         = ?,
               image         = ?,
+              status        = 1,
               date_modified = CONVERT_TZ(NOW(), '+00:00', '+03:00')
           WHERE product_id = ?`,
          [priceWithVat, imageLink, productId]
@@ -197,7 +200,8 @@ export async function getLastUpdatedTime(): Promise<string | null> {
          RowDataPacket & { last_updated: string }
       >(
          `SELECT MAX(date_modified) as last_updated
-          FROM 1c0p_product`
+          FROM 1c0p_product
+          WHERE status = 1 AND supplier_id = 12`
       )
       return results[0]?.last_updated || null
    } catch (error) {
@@ -208,26 +212,55 @@ export async function getLastUpdatedTime(): Promise<string | null> {
 
 export async function checkProductsExistence(
    models: string[]
-): Promise<Record<string, boolean>> {
+): Promise<Record<string, { exists: boolean; isActive: boolean }>> {
    if (models.length === 0) return {}
 
    const placeholders = models.map(() => '?').join(',')
+   // Check for products from Adam Home supplier (supplier_id = 12) and their status
    const results = await executeQuery<ProductRow>(
-      `SELECT model
+      `SELECT model, status
        FROM 1c0p_product
-       WHERE model IN (${placeholders})`,
+       WHERE model IN (${placeholders}) AND supplier_id = 12`,
       models
    )
 
-   const existingModels = new Set(results.map((row) => row.model))
+   const productMap = new Map(
+      results.map((row) => [row.model, row.status === 1])
+   )
 
    return models.reduce(
       (acc, model) => {
-         acc[model] = existingModels.has(model)
+         const exists = productMap.has(model)
+         const isActive = productMap.get(model) || false
+         acc[model] = { exists, isActive }
          return acc
       },
-      {} as Record<string, boolean>
+      {} as Record<string, { exists: boolean; isActive: boolean }>
    )
+}
+
+// NEW FUNCTION: Disable products that are not in the current XML feed
+// Only affects products from Adam Home supplier (supplier_id = 12)
+export async function disableProductsNotInXml(
+   currentXmlModels: string[]
+): Promise<number> {
+   if (currentXmlModels.length === 0) {
+      // If no models in XML, disable only Adam Home products
+      const [result] = await pool.execute<ResultSetHeader>(
+         `UPDATE 1c0p_product SET status = 0 WHERE status = 1 AND supplier_id = 12`
+      )
+      return result.affectedRows
+   }
+
+   const placeholders = currentXmlModels.map(() => '?').join(',')
+   const [result] = await pool.execute<ResultSetHeader>(
+      `UPDATE 1c0p_product
+       SET status = 0
+       WHERE status = 1 AND supplier_id = 12 AND model NOT IN (${placeholders})`,
+      currentXmlModels
+   )
+
+   return result.affectedRows
 }
 
 export default pool

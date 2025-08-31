@@ -59,4 +59,5 @@ export interface ProcessedProduct {
 export interface ProcessedProductWithStatus extends ProcessedProduct {
    existsInDatabase: boolean
    isNew: boolean
+   needsUpdate: boolean // true if product exists but is disabled
 }

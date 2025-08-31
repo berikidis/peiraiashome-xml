@@ -12,24 +12,11 @@ import {
    SortingState,
    useReactTable,
 } from '@tanstack/react-table'
-import {
-   Table,
-   TableBody,
-   TableCell,
-   TableHead,
-   TableHeader,
-   TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ProcessedProductWithStatus } from '@/types/xml-data'
-import {
-   BadgeCheck,
-   BadgePlus,
-   ChevronsUpDown,
-   Dot,
-   SquareArrowOutUpRight,
-} from 'lucide-react'
+import { ArrowUp, BadgeCheck, BadgePlus, ChevronsUpDown, Dot, SquareArrowOutUpRight, } from 'lucide-react'
 import Image from 'next/image'
 import { TablePagination } from '@/components/TablePagination'
 
@@ -47,20 +34,32 @@ const columns: ColumnDef<ProcessedProductWithStatus>[] = [
       id: 'status',
       header: 'Status',
       cell: ({ row }) => {
-         const isNew = row.original.isNew
-         return isNew ? (
-            <Badge>
-               <BadgePlus />
-               New
-            </Badge>
-         ) : (
-            <Badge variant="secondary">
-               <BadgeCheck />
-               Synced
-            </Badge>
-         )
+         const { isNew, needsUpdate } = row.original
+
+         if (isNew) {
+            return (
+               <Badge>
+                  <BadgePlus />
+                  New
+               </Badge>
+            )
+         } else if (needsUpdate) {
+            return (
+               <Badge variant="outline">
+                  <ArrowUp />
+                  Please update
+               </Badge>
+            )
+         } else {
+            return (
+               <Badge variant="secondary">
+                  <BadgeCheck />
+                  Up to date
+               </Badge>
+            )
+         }
       },
-      size: 80,
+      size: 120,
    },
    {
       accessorKey: 'model',
@@ -245,7 +244,9 @@ export function ProductTable({
                            key={row.id}
                            data-state={row.getIsSelected() && 'selected'}
                            className={
-                              row.original.isNew ? 'bg-neutral-100' : ''
+                              row.original.isNew || row.original.needsUpdate
+                                 ? 'bg-neutral-50'
+                                 : ''
                            }
                         >
                            {row.getVisibleCells().map((cell) => (

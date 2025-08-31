@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { xmlService } from '@/lib/xml-service'
-import { findProductByModel, insertNewProduct, updateProductDescription, } from '@/lib/database'
+import {
+   disableProductsNotInXml,
+   findProductByModel,
+   insertNewProduct,
+   updateProductDescription,
+} from '@/lib/database'
 
 export async function POST(request: NextRequest) {
    try {
@@ -12,6 +17,9 @@ export async function POST(request: NextRequest) {
       let errorCount = 0
       const errors: string[] = []
 
+      // Extract all models from current XML feed
+      const currentXmlModels = products.map((product) => product.model)
+
       for (const product of products) {
          try {
             // Find product in database by model
@@ -19,6 +27,7 @@ export async function POST(request: NextRequest) {
 
             if (dbProduct) {
                // Update existing product description, title, prices, image and attributes with data from XML
+               // This also re-enables the product if it was disabled (status = 1)
                const success = await updateProductDescription(
                   dbProduct.product_id,
                   product.title,
@@ -62,6 +71,15 @@ export async function POST(request: NextRequest) {
          }
       }
 
+      // Disable products that are no longer in the XML feed
+      let disabledCount = 0
+      try {
+         disabledCount = await disableProductsNotInXml(currentXmlModels)
+      } catch (error) {
+         console.error('Error disabling products not in XML:', error)
+         errors.push('Failed to disable products not in XML feed')
+      }
+
       return NextResponse.json({
          success: true,
          message: `Database update completed`,
@@ -69,6 +87,7 @@ export async function POST(request: NextRequest) {
             totalProducts: products.length,
             updatedCount,
             insertedCount,
+            disabledCount,
             errorCount,
             errors: errors.slice(0, 15),
          },

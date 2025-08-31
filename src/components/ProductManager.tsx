@@ -31,18 +31,26 @@ export function ProductManager({
          const result = await response.json()
 
          if (result.success) {
-            const { updatedCount, insertedCount } = result.stats
+            const { updatedCount, insertedCount, disabledCount } = result.stats
             const totalProcessed = updatedCount + insertedCount
 
             let description = ''
-            if (updatedCount > 0 && insertedCount > 0) {
-               description = `Updated ${updatedCount} existing products and inserted ${insertedCount} new products`
-            } else if (updatedCount > 0) {
-               description = `Updated ${updatedCount} products successfully`
-            } else if (insertedCount > 0) {
-               description = `Inserted ${insertedCount} new products successfully`
-            } else {
+            const actions = []
+
+            if (updatedCount > 0) {
+               actions.push(`Updated ${updatedCount} existing products`)
+            }
+            if (insertedCount > 0) {
+               actions.push(`Inserted ${insertedCount} new products`)
+            }
+            if (disabledCount > 0) {
+               actions.push(`Disabled ${disabledCount} products`)
+            }
+
+            if (actions.length === 0) {
                description = 'No changes were made'
+            } else {
+               description = actions.join(', ')
             }
 
             toast.success('Database updated', {

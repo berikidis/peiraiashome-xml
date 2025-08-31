@@ -11,23 +11,32 @@ async function ProductsContent() {
          getLastUpdatedTime(),
       ])
 
-      // Check which products exist in database
+      // Check which products exist in database and their status
       const models = products.map((p) => p.model)
       const existenceMap = await checkProductsExistence(models)
 
       // Add database existence status to products
       const productsWithStatus: ProcessedProductWithStatus[] = products.map(
-         (product) => ({
-            ...product,
-            existsInDatabase: existenceMap[product.model] || false,
-            isNew: !existenceMap[product.model],
-         })
+         (product) => {
+            const dbInfo = existenceMap[product.model]
+            const existsInDatabase = dbInfo?.exists || false
+            const isActive = dbInfo?.isActive || false
+
+            return {
+               ...product,
+               existsInDatabase,
+               isNew: !existsInDatabase,
+               needsUpdate: existsInDatabase && !isActive, // exists but disabled
+            }
+         }
       )
 
-      // Sort products: new products first, then existing ones
+      // Sort products: new products first, then needs update, then up to date
       const sortedProducts = productsWithStatus.sort((a, b) => {
          if (a.isNew && !b.isNew) return -1
          if (!a.isNew && b.isNew) return 1
+         if (a.needsUpdate && !b.needsUpdate) return -1
+         if (!a.needsUpdate && b.needsUpdate) return 1
          return 0
       })
 
