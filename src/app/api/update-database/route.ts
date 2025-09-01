@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { xmlService } from '@/lib/xml-service'
+import { XmlParserFactory } from '@/lib/parsers'
+import { getSupplierById } from '@/lib/supplier-config'
 import {
    disableProductsNotInXml,
    findProductByModel,
@@ -9,8 +10,31 @@ import {
 
 export async function POST(request: NextRequest) {
    try {
+      // Get supplier ID from request body
+      const body = await request.json()
+      const supplierKey = body.supplier
+
+      if (!supplierKey) {
+         return NextResponse.json(
+            { success: false, error: 'Supplier not specified' },
+            { status: 400 }
+         )
+      }
+
+      // Get supplier configuration
+      const supplierConfig = getSupplierById(supplierKey)
+      if (!supplierConfig) {
+         return NextResponse.json(
+            { success: false, error: `Unknown supplier: ${supplierKey}` },
+            { status: 400 }
+         )
+      }
+
+      // Create appropriate parser for this supplier
+      const parser = XmlParserFactory.createParser(supplierConfig.parserType)
+
       // Fetch and process XML data
-      const products = await xmlService.fetchAndParseXml()
+      const products = await parser.fetchAndParseXml(supplierConfig.xmlUrl)
 
       let updatedCount = 0
       let insertedCount = 0
@@ -22,8 +46,11 @@ export async function POST(request: NextRequest) {
 
       for (const product of products) {
          try {
-            // Find product in database by model
-            const dbProduct = await findProductByModel(product.model)
+            // Find product in database by model and supplier
+            const dbProduct = await findProductByModel(
+               product.model,
+               supplierConfig.supplierId
+            )
 
             if (dbProduct) {
                // Update existing product description, title, prices, image and attributes with data from XML
@@ -45,7 +72,7 @@ export async function POST(request: NextRequest) {
                   errors.push(`Failed to update product ${product.model}`)
                }
             } else {
-               // Insert new product into database in adamhome_hidden category
+               // Insert new product into database in hidden category for this supplier
                const newProductId = await insertNewProduct(
                   product.title,
                   product.description,
@@ -53,7 +80,8 @@ export async function POST(request: NextRequest) {
                   product.price_without_vat,
                   product.image,
                   product.model,
-                  product.size
+                  product.size,
+                  supplierConfig.supplierId
                )
 
                if (newProductId) {
@@ -71,10 +99,13 @@ export async function POST(request: NextRequest) {
          }
       }
 
-      // Disable products that are no longer in the XML feed
+      // Disable products that are no longer in the XML feed for this supplier
       let disabledCount = 0
       try {
-         disabledCount = await disableProductsNotInXml(currentXmlModels)
+         disabledCount = await disableProductsNotInXml(
+            currentXmlModels,
+            supplierConfig.supplierId
+         )
       } catch (error) {
          console.error('Error disabling products not in XML:', error)
          errors.push('Failed to disable products not in XML feed')
@@ -82,7 +113,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
          success: true,
-         message: `Database update completed`,
+         message: `Database update completed for ${supplierConfig.name}`,
+         supplier: supplierConfig.name,
          stats: {
             totalProducts: products.length,
             updatedCount,

@@ -43,12 +43,12 @@ export interface ProductRow extends RowDataPacket {
 }
 
 export async function findProductByModel(
-   model: string
+   model: string,
+   supplierId: number
 ): Promise<ProductRow | null> {
-   // Only look for products from Adam Home supplier (supplier_id = 12)
    const results = await executeQuery<ProductRow>(
-      'SELECT product_id, model, status FROM 1c0p_product WHERE model = ? AND supplier_id = 12 LIMIT 1',
-      [model]
+      'SELECT product_id, model, status FROM 1c0p_product WHERE model = ? AND supplier_id = ? LIMIT 1',
+      [model, supplierId]
    )
    return results[0] || null
 }
@@ -60,14 +60,15 @@ export async function insertNewProduct(
    priceWithoutVat: number,
    imageLink: string,
    model: string,
-   size: string
+   size: string,
+   supplierId: number
 ): Promise<number | null> {
    const connection = await pool.getConnection()
 
    try {
       await connection.beginTransaction()
 
-      // Insert into 1c0p_product table (status = 0 for new products, stock_status_id = 7, quantity = 199, xml_flag = 1 for XML products)
+      // Insert into 1c0p_product table - use original price (for strikethrough)
       const [productResult] = await connection.execute<ResultSetHeader>(
          `INSERT INTO 1c0p_product (
             xml_flag, gablias_flag, teoran, model, sku, upc, ean, jan, isbn, mpn,
@@ -78,13 +79,13 @@ export async function insertNewProduct(
             smp_url_category_id
          ) VALUES (
                      1, 0, 0, ?, '', '', '', '', '', ?,
-                     '', 199, 7, ?, 12, 12,
+                     '', 199, 7, ?, 12, ?,
                      1, ?, 0, 9, '0000-00-00', 0.00000000, 0,
                      0.00000000, 0.00000000, 0.00000000, 0, 1, 1, 0,
                      0, 0, CONVERT_TZ(NOW(), '+00:00', '+03:00'), CONVERT_TZ(NOW(), '+00:00', '+03:00'), 0, 0,
                      NULL
                   )`,
-         [model, model, imageLink, priceWithVat]
+         [model, model, imageLink, supplierId, priceWithoutVat]
       )
 
       const productId = productResult.insertId
@@ -100,12 +101,12 @@ export async function insertNewProduct(
          [productId, title, title, title, description]
       )
 
-      // Insert into 1c0p_product_special table
+      // Insert special price (discounted price) - this will be the active price
       await connection.execute(
          `INSERT INTO 1c0p_product_special (
             product_id, customer_group_id, price, date_start, date_end, priority
          ) VALUES (?, 0, ?, '0000-00-00', '0000-00-00', 1)`,
-         [productId, priceWithoutVat]
+         [productId, priceWithVat]
       )
 
       // Insert into 1c0p_product_attribute table (attribute_id = 17 for size)
@@ -159,7 +160,7 @@ export async function updateProductDescription(
          [title, title, title, description, productId]
       )
 
-      // Update product price, image, date_modified and re-enable if disabled
+      // Update product with original price (for strikethrough), image, date_modified and re-enable if disabled
       await pool.execute(
          `UPDATE 1c0p_product
           SET price         = ?,
@@ -167,15 +168,15 @@ export async function updateProductDescription(
               status        = 1,
               date_modified = CONVERT_TZ(NOW(), '+00:00', '+03:00')
           WHERE product_id = ?`,
-         [priceWithVat, imageLink, productId]
+         [priceWithoutVat, imageLink, productId]
       )
 
-      // Update special price (price without VAT) in product_special table
+      // Update or insert special price (discounted price)
       await pool.execute(
-         `UPDATE 1c0p_product_special
-          SET price = ?
-          WHERE product_id = ?`,
-         [priceWithoutVat, productId]
+         `INSERT INTO 1c0p_product_special (product_id, customer_group_id, price, date_start, date_end, priority)
+          VALUES (?, 0, ?, '0000-00-00', '0000-00-00', 1)
+          ON DUPLICATE KEY UPDATE price = VALUES(price)`,
+         [productId, priceWithVat]
       )
 
       // Update product attribute text with size from XML (attribute_id = 17)
@@ -194,14 +195,17 @@ export async function updateProductDescription(
    }
 }
 
-export async function getLastUpdatedTime(): Promise<string | null> {
+export async function getLastUpdatedTime(
+   supplierId: number
+): Promise<string | null> {
    try {
       const results = await executeQuery<
          RowDataPacket & { last_updated: string }
       >(
          `SELECT MAX(date_modified) as last_updated
           FROM 1c0p_product
-          WHERE status = 1 AND supplier_id = 12`
+          WHERE status = 1 AND supplier_id = ?`,
+         [supplierId]
       )
       return results[0]?.last_updated || null
    } catch (error) {
@@ -211,17 +215,17 @@ export async function getLastUpdatedTime(): Promise<string | null> {
 }
 
 export async function checkProductsExistence(
-   models: string[]
+   models: string[],
+   supplierId: number
 ): Promise<Record<string, { exists: boolean; isActive: boolean }>> {
    if (models.length === 0) return {}
 
    const placeholders = models.map(() => '?').join(',')
-   // Check for products from Adam Home supplier (supplier_id = 12) and their status
    const results = await executeQuery<ProductRow>(
       `SELECT model, status
        FROM 1c0p_product
-       WHERE model IN (${placeholders}) AND supplier_id = 12`,
-      models
+       WHERE model IN (${placeholders}) AND supplier_id = ?`,
+      [...models, supplierId]
    )
 
    const productMap = new Map(
@@ -239,18 +243,19 @@ export async function checkProductsExistence(
    )
 }
 
-// NEW FUNCTION: Disable products that are not in the current XML feed
-// Only affects products from Adam Home supplier (supplier_id = 12)
+// Disable products that are not in the current XML feed
 // Also sets stock_status_id to 5 when disabling
 export async function disableProductsNotInXml(
-   currentXmlModels: string[]
+   currentXmlModels: string[],
+   supplierId: number
 ): Promise<number> {
    if (currentXmlModels.length === 0) {
-      // If no models in XML, disable only Adam Home products and set stock_status_id to 5
+      // If no models in XML, disable only products from this supplier and set stock_status_id to 5
       const [result] = await pool.execute<ResultSetHeader>(
          `UPDATE 1c0p_product
           SET status = 0, stock_status_id = 5
-          WHERE status = 1 AND supplier_id = 12`
+          WHERE status = 1 AND supplier_id = ?`,
+         [supplierId]
       )
       return result.affectedRows
    }
@@ -259,8 +264,8 @@ export async function disableProductsNotInXml(
    const [result] = await pool.execute<ResultSetHeader>(
       `UPDATE 1c0p_product
        SET status = 0, stock_status_id = 5
-       WHERE status = 1 AND supplier_id = 12 AND model NOT IN (${placeholders})`,
-      currentXmlModels
+       WHERE status = 1 AND supplier_id = ? AND model NOT IN (${placeholders})`,
+      [supplierId, ...currentXmlModels]
    )
 
    return result.affectedRows

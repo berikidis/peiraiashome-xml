@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
             port: '',
             pathname: '/image/**',
          },
+         {
+            protocol: 'https',
+            hostname: 'homeline.com.gr',
+            port: '',
+            pathname: '/wp-content/uploads/**',
+         },
       ],
    },
 }

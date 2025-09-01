@@ -1,24 +1,43 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ProductTable } from './ProductTable'
 import { Button } from './ui/button'
 import { ProcessedProductWithStatus } from '@/types/xml-data'
+import { SupplierConfig } from '@/lib/supplier-config'
 import { Database, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 
 interface ProductManagerProps {
    initialData: ProcessedProductWithStatus[]
    lastUpdated: string | null
+   suppliers: SupplierConfig[]
+   currentSupplier: SupplierConfig
 }
 
 export function ProductManager({
    initialData,
    lastUpdated,
+   suppliers,
+   currentSupplier,
 }: ProductManagerProps) {
    const [globalFilter, setGlobalFilter] = useState('')
    const [isUpdating, setIsUpdating] = useState(false)
+   const router = useRouter()
+
+   const handleSupplierChange = (supplierKey: string) => {
+      // Update URL to show selected supplier
+      router.push(`/?supplier=${supplierKey}`)
+   }
 
    const handleUpdateDatabase = async () => {
       setIsUpdating(true)
@@ -26,6 +45,12 @@ export function ProductManager({
       try {
          const response = await fetch('/api/update-database', {
             method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+               supplier: currentSupplier.id,
+            }),
          })
 
          const result = await response.json()
@@ -53,9 +78,12 @@ export function ProductManager({
                description = actions.join(', ')
             }
 
-            toast.success('Database updated', {
+            toast.success(`${currentSupplier.name} database updated`, {
                description,
             })
+
+            // Refresh the page to show updated data
+            router.refresh()
          } else {
             toast.error('Update failed', {
                description: result.message || 'Failed to update database',
@@ -79,7 +107,7 @@ export function ProductManager({
          <div className="flex h-full flex-1 flex-col gap-8">
             <div className="flex flex-col gap-1">
                <h2 className="text-2xl font-semibold tracking-tight">
-                  Adam Home
+                  XML Product Manager
                </h2>
                <p className="text-muted-foreground">
                   {lastUpdated
@@ -90,12 +118,31 @@ export function ProductManager({
 
             <div className="flex flex-col gap-4">
                <div className="flex justify-between items-center gap-2">
-                  <Input
-                     placeholder="Search by model number"
-                     value={globalFilter}
-                     onChange={(event) => setGlobalFilter(event.target.value)}
-                     className="max-w-sm h-8"
-                  />
+                  <div className="flex items-center gap-2">
+                     <Select
+                        value={currentSupplier.id}
+                        onValueChange={handleSupplierChange}
+                     >
+                        <SelectTrigger className="w-48">
+                           <SelectValue placeholder="Select supplier" />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {suppliers.map((supplier) => (
+                              <SelectItem key={supplier.id} value={supplier.id}>
+                                 {supplier.name}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <Input
+                        placeholder="Search by model number"
+                        value={globalFilter}
+                        onChange={(event) =>
+                           setGlobalFilter(event.target.value)
+                        }
+                        className="max-w-sm h-8"
+                     />
+                  </div>
                   <div className="flex items-center gap-2">
                      <Button
                         onClick={handleUpdateDatabase}
@@ -107,7 +154,7 @@ export function ProductManager({
                         ) : (
                            <Database />
                         )}
-                        Update Database
+                        Update {currentSupplier.name}
                      </Button>
                   </div>
                </div>
